@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "scholiator"
+version = "0.1.0"
+description = "Generate BibTeX and biblatex bibliography data from Wikidata QID citations"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+scholiator = "scholiator.cli:main"
+
+[tool.setuptools]
+packages = ["scholiator"]
