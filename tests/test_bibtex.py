@@ -24,7 +24,7 @@ class BibtexTests(unittest.TestCase):
         self.assertIn(r"journal = {Journal \& Tests}", text)
         self.assertIn(r"doi = {10.1234/ABC\_DEF}", text)
         self.assertIn("wikidata = {Q100}", text)
-        self.assertIn(r'Ex{\"a}mple, Ada', text)
+        self.assertIn(r'Ex\"{a}mple, Ada', text)
 
     def test_middle_name_is_preserved_in_structured_name(self):
         record = BibliographicRecord(
