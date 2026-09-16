@@ -1,0 +1,24 @@
+{
+  "id": "Q400",
+  "labels": {
+    "en": {
+      "language": "en",
+      "value": "English"
+    }
+  },
+  "claims": {
+    "P218": [
+      {
+        "rank": "normal",
+        "mainsnak": {
+          "snaktype": "value",
+          "property": "P218",
+          "datavalue": {
+            "value": "en",
+            "type": "string"
+          }
+        }
+      }
+    ]
+  }
+}

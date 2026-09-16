@@ -1,0 +1,62 @@
+{
+  "id": "Q200",
+  "labels": {
+    "en": {
+      "language": "en",
+      "value": "Ada Example"
+    }
+  },
+  "claims": {
+    "P31": [
+      {
+        "rank": "normal",
+        "mainsnak": {
+          "snaktype": "value",
+          "property": "P31",
+          "datavalue": {
+            "value": {
+              "entity-type": "item",
+              "numeric-id": 5,
+              "id": "Q5"
+            },
+            "type": "wikibase-entityid"
+          }
+        }
+      }
+    ],
+    "P735": [
+      {
+        "rank": "normal",
+        "mainsnak": {
+          "snaktype": "value",
+          "property": "P735",
+          "datavalue": {
+            "value": {
+              "entity-type": "item",
+              "numeric-id": 201,
+              "id": "Q201"
+            },
+            "type": "wikibase-entityid"
+          }
+        }
+      }
+    ],
+    "P734": [
+      {
+        "rank": "normal",
+        "mainsnak": {
+          "snaktype": "value",
+          "property": "P734",
+          "datavalue": {
+            "value": {
+              "entity-type": "item",
+              "numeric-id": 202,
+              "id": "Q202"
+            },
+            "type": "wikibase-entityid"
+          }
+        }
+      }
+    ]
+  }
+}

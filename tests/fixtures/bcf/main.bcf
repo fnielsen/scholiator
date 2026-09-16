@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bcf:controlfile xmlns:bcf="https://sourceforge.net/projects/biblatex">
+  <bcf:section number="0">
+    <bcf:citekey order="1">Smith2020</bcf:citekey>
+    <bcf:citekey order="2">Q100</bcf:citekey>
+    <bcf:citekey order="3">Q101</bcf:citekey>
+    <bcf:citekey order="4">Q100</bcf:citekey>
+  </bcf:section>
+</bcf:controlfile>
