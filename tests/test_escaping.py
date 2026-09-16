@@ -14,7 +14,7 @@ class EscapingTests(unittest.TestCase):
     def test_latin_unicode_to_ascii_tex(self):
         escaped = escape_text("Exämple Øresund", ascii_only=True)
         escaped.encode("ascii")
-        self.assertIn(r'\"a', escaped)
+        self.assertIn(r'\"{a}', escaped)
         self.assertIn(r"\O", escaped)
 
     def test_utf8_mode_preserves_unicode(self):
