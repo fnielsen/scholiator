@@ -107,6 +107,17 @@ Scholiator uses the Wikidata Action API `wbgetentities`, batches requests, sends
 
 The User-Agent project URL is centralized in `scholiator/wikidata.py` and should be updated when Scholiator gets its own canonical project URL.
 
+## Bibliographic type resolution
+
+Scholiator uses exact supported P31 mappings, but some Wikidata works legitimately have more than one publication type. Known paper-like overlaps are resolved conservatively rather than failing immediately:
+
+- an explicit conference paper is rendered as `inproceedings`;
+- an article/chapter whose P1433 container has P4745 (`is proceedings from`) is rendered as `inproceedings`;
+- otherwise `chapter` is treated as more specific than the generic `scholarly article` and rendered as `incollection`;
+- unrelated conflicting types still fail, and the error names the cited QID.
+
+A resolved conflict is reported as a warning so that questionable Wikidata typing remains visible.
+
 ## Tests
 
 The standard test suite is entirely offline:

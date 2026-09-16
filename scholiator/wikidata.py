@@ -15,7 +15,7 @@ from .cache import EntityCache
 from .citation import is_qid
 
 API_URL = "https://www.wikidata.org/w/api.php"
-PROJECT_URL = "https://github.com/WDscholia/scholia"
+PROJECT_URL = "https://github.com/fnielsen/scholiator"
 DEFAULT_USER_AGENT = f"Scholiator/{__version__} ({PROJECT_URL}; bibliography generator)"
 
 
@@ -108,7 +108,8 @@ class WikidataClient:
                     "ids": "|".join(batch),
                     "props": "info|labels|claims",
                     "redirects": "yes",
-                    "maxlag": "5",
+                    # "maxlag" can be omitted if it is not a bot
+                    # "maxlag": "5",
                     "format": "json",
                 }
             )

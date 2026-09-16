@@ -10,7 +10,10 @@ from .model import BibliographicRecord, Name
 
 TYPE_BY_QID = {
     "Q13442814": "article",
+    "Q191067": "article",
+    "Q21481766": "incollection",
     "Q23927052": "inproceedings",
+    "Q3331189": "book",
     "Q571": "book",
     "Q1980247": "incollection",
     "Q187685": "doctoral_thesis",
@@ -19,6 +22,13 @@ TYPE_BY_QID = {
     "Q10870555": "report",
     "Q7397": "software",
 }
+
+# These three types describe progressively more specific ways in which a
+# paper-like work can be published.  Wikidata items can legitimately carry
+# more than one of them (for example, both "scholarly article" and
+# "chapter").  Known overlaps are resolved below rather than treated as
+# arbitrary conflicts.
+PAPER_LIKE_TYPES = frozenset({"article", "incollection", "inproceedings"})
 
 RELATED_PROPERTIES = ("P50", "P98", "P123", "P1433", "P407")
 NAME_PART_PROPERTIES = ("P735", "P734")
@@ -190,15 +200,40 @@ def _name_from_entity(
 ) -> Name | None:
     if author_entity is None:
         return None
+
+    label = _label(author_entity, languages)
     given = _first_linked_label(author_entity, "P735", entity_lookup, languages)
     family = _first_linked_label(author_entity, "P734", entity_lookup, languages)
+
+    # P735/P734 are often incomplete even when present.  Use them as
+    # structure hints, but never let them discard information from the
+    # person's label.  A common case is e.g. label="Finn Årup Nielsen",
+    # P735="Finn", P734="Nielsen": since the known family name is a suffix
+    # of the label, the full prefix is a defensible given-name component.
+    if label and family:
+        if label == family:
+            return Name(family=family)
+        suffix = " " + family
+        if label.endswith(suffix):
+            label_given = label[: -len(suffix)].strip()
+            if label_given:
+                # If Wikidata also has P735, only enrich it when the label
+                # prefix is compatible with that value.  Otherwise retain the
+                # complete label literally rather than inventing structure.
+                if given is None or label_given == given or label_given.startswith(given + " "):
+                    return Name(given=label_given, family=family)
+
+    if given and family:
+        return Name(given=given, family=family)
+
+    # If either structured component is missing, the complete label is safer
+    # than emitting a knowingly incomplete name.  BibTeX/Biber can parse an
+    # ordinary natural-order personal name such as "John Michael Smith".
+    if label:
+        return Name(literal=label)
+
     if given or family:
         return Name(given=given, family=family)
-    label = _label(author_entity, languages)
-    if label:
-        # Keep an unstructured label unparsed. This is safe for organizations
-        # and avoids inventing name components for people.
-        return Name(literal=label)
     return None
 
 
@@ -213,10 +248,12 @@ def _names(
     candidates: list[tuple[str | None, int, Name]] = []
     serial = 0
 
+    linked_ordinals: set[str] = set()
     for statement in _nondeprecated(work, linked_pid):
         qid = _qid_value(statement)
         if not qid:
             continue
+        ordinal = _series_ordinal(statement)
         named_as = _statement_named_as(statement)
         if named_as:
             name = Name(literal=named_as)
@@ -225,7 +262,9 @@ def _names(
         if name is None:
             warnings.append(f"Could not determine a name for {linked_pid} entity {qid}")
             continue
-        candidates.append((_series_ordinal(statement), serial, name))
+        candidates.append((ordinal, serial, name))
+        if ordinal is not None:
+            linked_ordinals.add(ordinal)
         serial += 1
 
     if string_pid:
@@ -233,7 +272,19 @@ def _names(
             text = _string_value(statement)
             if not text:
                 continue
-            candidates.append((_series_ordinal(statement), serial, Name(literal=text)))
+            ordinal = _series_ordinal(statement)
+            # A P50/P98 entity and a literal author-name statement at the same
+            # explicit series ordinal describe the same author slot much more
+            # reliably than string-similarity heuristics do.  Prefer the
+            # linked entity (whose statement may also carry P1932) and avoid
+            # emitting the author twice.
+            if ordinal is not None and ordinal in linked_ordinals:
+                warnings.append(
+                    f"Ignoring {string_pid} value {text!r} at series ordinal {ordinal}; "
+                    f"{linked_pid} has an entity author at the same ordinal"
+                )
+                continue
+            candidates.append((ordinal, serial, Name(literal=text)))
             serial += 1
 
     ordinals = [ordinal for ordinal, _, _ in candidates if ordinal is not None]
@@ -343,17 +394,89 @@ def _publication_date(work: dict, warnings: list[str]) -> tuple[str | None, str 
     return year, year
 
 
-def _type(work: dict) -> str:
-    supported: set[str] = set()
+def _proceedings_container_qid(work: dict, entity_lookup: dict[str, dict]) -> str | None:
+    """Return a P1433 container that is explicitly conference proceedings.
+
+    P4745 ("is proceedings from") is a strong structural signal that the
+    containing work is conference proceedings.  Looking at the already-fetched
+    P1433 entity avoids guessing from labels such as a title containing the
+    word "Proceedings".
+    """
+    for statement in _alternative_statements(work, "P1433"):
+        qid = _qid_value(statement)
+        if not qid:
+            continue
+        container = entity_lookup.get(qid)
+        if container is not None and _nondeprecated(container, "P4745"):
+            return qid
+    return None
+
+
+def _type(
+    work: dict,
+    entity_lookup: dict[str, dict],
+    warnings: list[str],
+    *,
+    identifier: str,
+) -> str:
+    """Choose the most appropriate supported bibliography type.
+
+    Wikidata P31 values are not always mutually exclusive.  In particular,
+    paper-like works may be typed both as a scholarly article and as a chapter.
+    Resolve these known compatible overlaps by specificity and publication
+    context.  Unrelated type conflicts remain errors rather than being settled
+    by an arbitrary global priority list.
+    """
+    matched: list[tuple[str, str]] = []
     for statement in _alternative_statements(work, "P31"):
         qid = _qid_value(statement)
         if qid in TYPE_BY_QID:
-            supported.add(TYPE_BY_QID[qid])
-    if not supported:
-        raise NormalizationError("Unsupported or missing bibliographic type")
-    if len(supported) > 1:
-        raise NormalizationError("Conflicting supported bibliographic types: " + ", ".join(sorted(supported)))
-    return next(iter(supported))
+            pair = (qid, TYPE_BY_QID[qid])
+            if pair not in matched:
+                matched.append(pair)
+
+    if not matched:
+        raise NormalizationError(f"{identifier}: unsupported or missing bibliographic type")
+
+    supported = {entry_type for _, entry_type in matched}
+    if len(supported) == 1:
+        return next(iter(supported))
+
+    description = ", ".join(f"{qid}={entry_type}" for qid, entry_type in matched)
+
+    # Conference proceedings are more informative than the generic
+    # article/chapter distinction.  For example, Q128801580 is both a
+    # scholarly article and a chapter, while its P1433 container is explicitly
+    # proceedings via P4745; its bibliography type is therefore inproceedings.
+    if supported <= PAPER_LIKE_TYPES:
+        proceedings_qid = _proceedings_container_qid(work, entity_lookup)
+        if proceedings_qid is not None:
+            warnings.append(
+                f"Multiple supported bibliographic types ({description}); "
+                f"selected inproceedings because P1433 container {proceedings_qid} "
+                "has P4745 (is proceedings from)"
+            )
+            return "inproceedings"
+
+        # Among non-proceedings paper-like values, an explicit chapter is more
+        # specific than the broad scholarly-article class.  An explicit
+        # conference-paper classification is similarly more specific.
+        if "inproceedings" in supported:
+            selected = "inproceedings"
+        elif "incollection" in supported:
+            selected = "incollection"
+        else:
+            selected = "article"
+        warnings.append(
+            f"Multiple supported bibliographic types ({description}); selected {selected} "
+            "using paper-type specificity"
+        )
+        return selected
+
+    raise NormalizationError(
+        f"{identifier}: conflicting supported bibliographic types ({description}); "
+        "no conservative resolution rule applies"
+    )
 
 
 def normalize_work(
@@ -375,7 +498,7 @@ def normalize_work(
     if not title:
         raise NormalizationError(f"No usable title for {citation_key}")
 
-    entry_type = _type(work)
+    entry_type = _type(work, entity_lookup, warnings, identifier=citation_key)
     authors, author_warnings = _names(work, "P50", "P2093", entity_lookup, label_languages)
     editors, editor_warnings = _names(work, "P98", None, entity_lookup, label_languages)
     warnings.extend(author_warnings)

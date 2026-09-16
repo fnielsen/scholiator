@@ -3,7 +3,7 @@ from pathlib import Path
 import unittest
 
 from scholiator import bibtex
-from scholiator.model import BibliographicRecord
+from scholiator.model import BibliographicRecord, Name
 from scholiator.normalize import normalize_work
 
 FIXTURES = Path(__file__).parent / "fixtures" / "wikidata"
@@ -25,6 +25,17 @@ class BibtexTests(unittest.TestCase):
         self.assertIn(r"doi = {10.1234/ABC\_DEF}", text)
         self.assertIn("wikidata = {Q100}", text)
         self.assertIn(r'Ex{\"a}mple, Ada', text)
+
+    def test_middle_name_is_preserved_in_structured_name(self):
+        record = BibliographicRecord(
+            citation_key="Q1",
+            canonical_qid="Q1",
+            entry_type="article",
+            title="Title",
+            authors=(Name(given="Finn Årup", family="Nielsen"),),
+        )
+        text = bibtex.render(record)
+        self.assertIn(r"author = {Nielsen, Finn {\AA}rup}", text)
 
     def test_redirect_key_and_canonical_wikidata_field(self):
         record = BibliographicRecord(

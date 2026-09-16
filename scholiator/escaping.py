@@ -12,6 +12,8 @@ class EscapingError(ValueError):
 
 _SPECIAL = {
     "\\": r"\textbackslash{}",
+    ">": r"\textgreater{}",
+    "<": r"\textless{}",
     "{": r"\{",
     "}": r"\}",
     "%": r"\%",
@@ -57,6 +59,8 @@ _DIRECT_ASCII_TEX = {
     "ð": r"{\dh}",
     "Þ": r"{\TH}",
     "þ": r"{\th}",
+    "’": "'",
+    "–": "--",
 }
 
 _DOI_RE = re.compile(r"^10\.\d{4,9}/\S+$", re.IGNORECASE)
@@ -100,7 +104,7 @@ def escape_text(value: str, *, ascii_only: bool) -> str:
                 if macro is None:
                     supported = False
                     break
-                expression = "{" + macro + expression + "}"
+                expression = macro + "{" + expression + "}"
             if supported:
                 result.append(expression)
                 continue

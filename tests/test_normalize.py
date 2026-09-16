@@ -46,9 +46,40 @@ class NormalizeTests(unittest.TestCase):
         result = normalize_work("Q100", work, lookup())
         self.assertEqual(result.record.authors[0].literal, "A. Example")
 
+
+    def test_entity_name_uses_label_to_restore_middle_name(self):
+        entities = lookup()
+        entities["Q200"]["labels"]["en"]["value"] = "Ada Marie Exämple"
+        result = normalize_work("Q100", entities["Q100"], entities)
+        self.assertEqual(result.record.authors[0].given, "Ada Marie")
+        self.assertEqual(result.record.authors[0].family, "Exämple")
+
+    def test_entity_with_missing_family_name_uses_full_label(self):
+        entities = lookup()
+        entities["Q200"]["claims"].pop("P734")
+        entities["Q200"]["labels"]["en"]["value"] = "Ada Marie Example"
+        result = normalize_work("Q100", entities["Q100"], entities)
+        self.assertEqual(result.record.authors[0].literal, "Ada Marie Example")
+        self.assertIsNone(result.record.authors[0].given)
+        self.assertIsNone(result.record.authors[0].family)
+
+    def test_p50_wins_over_p2093_at_same_explicit_ordinal(self):
+        work = load("Q100")
+        duplicate = copy.deepcopy(work["claims"]["P2093"][0])
+        duplicate["mainsnak"]["datavalue"]["value"] = "Ada Example"
+        duplicate["qualifiers"]["P1545"][0]["datavalue"]["value"] = "1"
+        work["claims"]["P2093"].insert(0, duplicate)
+        result = normalize_work("Q100", work, lookup())
+        rendered = [name.literal or f"{name.given} {name.family}" for name in result.record.authors]
+        self.assertEqual(rendered.count("Ada Exämple"), 1)
+        self.assertNotIn("Ada Example", rendered)
+        self.assertTrue(any("same ordinal" in warning for warning in result.warnings))
+
     def test_duplicate_series_ordinal_warns(self):
         work = load("Q100")
-        work["claims"]["P2093"][0]["qualifiers"]["P1545"][0]["datavalue"]["value"] = "1"
+        duplicate = copy.deepcopy(work["claims"]["P2093"][0])
+        duplicate["mainsnak"]["datavalue"]["value"] = "Second Literal Author"
+        work["claims"]["P2093"].append(duplicate)
         result = normalize_work("Q100", work, lookup())
         self.assertTrue(any("Duplicate series ordinal" in warning for warning in result.warnings))
 
@@ -69,18 +100,51 @@ class NormalizeTests(unittest.TestCase):
         ]
         self.assertEqual(normalize_work("Q100", work, lookup()).record.title, "Preferred")
 
-    def test_conflicting_supported_types_fail(self):
+    def test_article_and_chapter_selects_incollection(self):
+        work = load("Q100")
+        extra = copy.deepcopy(work["claims"]["P31"][0])
+        extra["mainsnak"]["datavalue"]["value"]["id"] = "Q1980247"
+        work["claims"]["P31"].append(extra)
+        result = normalize_work("Q100", work, lookup())
+        self.assertEqual(result.record.entry_type, "incollection")
+        self.assertTrue(any("selected incollection" in warning for warning in result.warnings))
+
+    def test_proceedings_container_selects_inproceedings(self):
+        work = load("Q100")
+        extra = copy.deepcopy(work["claims"]["P31"][0])
+        extra["mainsnak"]["datavalue"]["value"]["id"] = "Q1980247"
+        work["claims"]["P31"].append(extra)
+
+        entities = lookup()
+        entities["Q300"]["claims"]["P4745"] = [
+            {
+                "rank": "normal",
+                "mainsnak": {
+                    "snaktype": "value",
+                    "property": "P4745",
+                    "datavalue": {
+                        "value": {"entity-type": "item", "numeric-id": 999, "id": "Q999"},
+                        "type": "wikibase-entityid",
+                    },
+                },
+            }
+        ]
+        result = normalize_work("Q100", work, entities)
+        self.assertEqual(result.record.entry_type, "inproceedings")
+        self.assertTrue(any("P4745" in warning for warning in result.warnings))
+
+    def test_unrelated_conflicting_supported_types_fail_with_identifier(self):
         work = load("Q100")
         extra = copy.deepcopy(work["claims"]["P31"][0])
         extra["mainsnak"]["datavalue"]["value"]["id"] = "Q571"
         work["claims"]["P31"].append(extra)
-        with self.assertRaises(NormalizationError):
+        with self.assertRaisesRegex(NormalizationError, r"Q100: conflicting supported bibliographic types"):
             normalize_work("Q100", work, lookup())
 
-    def test_unsupported_type_fails(self):
+    def test_unsupported_type_fails_with_identifier(self):
         work = load("Q100")
         work["claims"]["P31"][0]["mainsnak"]["datavalue"]["value"]["id"] = "Q999"
-        with self.assertRaises(NormalizationError):
+        with self.assertRaisesRegex(NormalizationError, r"Q100: unsupported or missing bibliographic type"):
             normalize_work("Q100", work, lookup())
 
 
