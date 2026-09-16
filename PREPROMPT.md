@@ -18,6 +18,14 @@ SPARQL query) and generate a .bib BIBTeX file. The BIBTeX file is then
 handled with the standard tex tools (e.g., bibtex), i.e., there is no
 support for .bbl generation.
 
+\cite{Smith2020,Q130361570,local-report}
+
+should only result in
+
+Q130361570
+
+and silently leave the other keys alone.
+
 In Scholia, we also handles DOIs, e.g., "\cite{10.1234/foo}". This
 would require a value lookup with Wikidata API. I think this should be
 left out in the first version
@@ -30,11 +38,18 @@ citation packages. It shall support traditional \citation records as
 used by BibTeX and natbib, and biblatex/Biber citation
 information. For biblatex/Biber, the .bcf control file may be
 used. Included/subordinate auxiliary files shall be handled where
-applicable. Command-line prefeers interface
+applicable. Preferred Command-line interface
 
-scholiator paper
+scholiator paper    # use .bcf if exists otherwise use .aux
 scholiator paper.aux
 scholiator paper.bcf
+scholiator --offline paper
+ → paper.bib  (with -o FILE and --output FILE as override)
+
+Scholiator generates its output file from scratch and does not attempt
+to parse, merge, or preserve manually edited .bib entries. 
+
+generate → validate → temporary file → rename
 
 The command-line program should be built in Python, - that is the
 programming language I am mostly familiar with and would be able to
@@ -49,7 +64,7 @@ third-party Python dependencies
 
 Any load on Wikimedia servers should be as light as possible and be
 in adherence to Wikimedia guidelines. Any user agent should be clearly
-indicated. dDscriptive User-Agent including Scholiator version and
+indicated. dscriptive User-Agent including Scholiator version and
 contact/project URL, maxlag on Action API calls, HTTP compression,
 serial or very low-concurrency requests, and honoring
 429/Retry-After.  
@@ -61,7 +76,7 @@ alternative or diagnostic retrieval mechanism. Avoid the SPARQL endpoints.
 A cache of downloaded data from Wikidata would probably be a good
 idea, so the user experience a quick response and the Wikidata API no
 unnecessary load. However, it should be possible for the user to
-rebuild the cache, perhaps individual entries, e.g., after and update
+rebuild the cache, perhaps individual entries, e.g., after an update
 or correction on Wikidata. Example commands:
 
 scholiator --refresh paper
@@ -69,16 +84,42 @@ scholiator cache refresh Q130361570
 scholiator cache remove Q130361570
 scholiator cache clear
 
-I take it that the cache would be the JSON file from the Wikidata API.
+The cache stores one raw Wikibase entity JSON object per canonical
+Wikidata entity. Batched wbgetentities responses are split into
+individual cache entries. Derived BibliographicRecord objects and
+generated BibTeX/BibLaTeX are not cached.
+
+--offline
+
+means: No network requests are permitted. If a required entity is
+absent from the cache, generation fails.
+
+--refresh
+
+means: Re-fetch all referenced Wikidata entities regardless of cache
+contents. 
+
 
 Security of the system is very important. Malicious or strange entries in
 Wikidata. From the conversion from Wikidata data to tex data there
 must be handling of elements like backslash and double-hat ^^ that I
 believe can escape LaTeX and could possibly compromise the system.
 
-Wikidata is UFT-8 while bibtex is remaining to be non-UTF-8 as far as
-I understand. Handling for bibtex would unfortunately involve a
-considerable amout of translation.
+ASCII control characters, embedded NUL characters, and unexpected
+line-control characters in Wikidata strings MUST be rejected or safely
+encoded; they must never be copied verbatim into generated
+bibliography files.
+
+Wikidata text is Unicode. Traditional BibTeX is fundamentally
+ASCII-oriented (with variants such as bibtex8 supporting legacy 8-bit
+encodings), while Biber provides native Unicode support. Scholiator's
+BibTeX renderer therefore emits ASCII-only TeX-safe output, whereas
+its biblatex/Biber renderer emits TeX-safe UTF-8. 
+
+text field     → escape_text()
+name field     → encode_name()
+URL field      → escape_url()
+identifier     → validate_identifier()
 
 It is a question what bibliography tools should be supported. I am
 under the impression that bibtex is still used a lot, but people is
@@ -86,15 +127,21 @@ also using biblatex package and biber. I contemplate on supporting
 both as well as if there is other means to hand bibliography in the
 tex environment. There could be two modes of output:
 
---format=bibtex       Unicode → TeX macros where necessary
---format=biblatex     UTF-8 output, intended for Biber
+--format=bibtex       Unicode → TeX-safe TeX macros where necessary
+--format=biblatex     TeX-safe UTF-8 output, intended for Biber
+
+All Wikidata-derived strings are treated as untrusted data. Both
+renderers MUST perform TeX/BibTeX-safe escaping. The BibTeX renderer
+additionally converts supported non-ASCII Unicode characters to safe
+TeX representations; the biblatex renderer preserves Unicode where
+possible.
 
 Note there are different formats in the .aux file depending on
-bibtex/biblatex.  biblatex / Biber generates a .bcf that should be handled.x
+bibtex/biblatex.  biblatex / Biber generates a .bcf that should be handled.
 
 The program should be able to convert a broad range of properties and
 convert them to bibtex fields, so that a style-file combine them in a
-broad range of ways. Suggestions for initial converage: journal
+broad range of ways. Suggestions for initial coverage: journal
 articles, conference papers, books, chapters, theses and perhaps
 reports/software, with fields such as author, editor, title,
 journaltitle/journal, booktitle, publisher, date/year, volume, number,
@@ -105,6 +152,9 @@ in the JSON as fallback only. Preserve explicit series ordinal
 ordering, combine P50 and P2093 sensibly, and avoid “improving” names too
 aggressively. Formatting family, given versus given family can then be
 a renderer/configuration issue. 
+
+It could also be possible to use P1932 ('object named as' as a
+qualifier to P50). Also consider that author names may be organizations.
 
 The program should output a bibtex file (biblatex?) file with standard
 files and where appropriate extra fields, e.g., a 'wikidata' field
@@ -117,9 +167,12 @@ Language  should be handled with user-preferred language for title,
 publisher, venue, e.g., with this fallback
 
 label_languages = ["en", "mul"]
-title_languages = [...]
+title_languages = ["en", "mul"]
 
-Design suggestion is to seaprater a canonical Wikidata bibliographic
+Prefer a title whose language agrees with the work's language (P407),
+and use configured language preferences as fallback. 
+
+Design suggestion is to separate a canonical Wikidata bibliographic
 record from the output format. Internally, construct something like a
 Python BibliographicRecord containing title, authors, date, container
 title, volume, issue, pages, DOI, ISBN, publisher, event, language,
@@ -130,13 +183,83 @@ Wikidata JSON → BibliographicRecord → BibTeX renderer
 
 I would like to have a program that is reasonable configurable if that
 would be appropriate, e.g., would it be appropriate with language and
-author format specification? short-form versus language form?
+author format specification? Initial a small configuration: 
 
+[scholiator]
+format = bibtex
+label_languages = en,mul
+title_languages = en,mul
+cache_dir = ...
 
+Wikidata → bibliography type mapping:
+
+Q13442814  scholarly article  → article
+Q23927052  conference paper   → inproceedings
+Q571       book               → book
+Q1980247   chapter            → incollection
+Q187685    doctoral thesis    → phdthesis / thesis
+Q1907875   master's thesis    → mastersthesis / thesis
+Q798134    bachelor's thesis  → thesis or misc, depending on renderer
+Q10870555  report             → techreport / report
+Q7397      software           → misc / software
+
+For \@input{chapter1.aux}: Included auxiliary files are treated purely
+as data and only explicitly supported records are recognized. Included
+paths are normalized and restricted to the document/project area
+unless explicitly permitted. 
+
+Bibliographic type classification uses a curated mapping of supported
+Wikidata class QIDs. 
 
 Failure policy: For scholarly writing I think Scholiator should be
-conservative: malformed QID, missing item, ambiguous/contradictory
-Wikidata values, unsafe P6835, or unsupported bibliographic type
+conservative: missing item, ambiguous/contradictory
+Wikidata values, or unsupported bibliographic type
 should generate a conspicuous warning, not silently manufacture
 something plausible. Missing optional fields can simply be
-omitted. This fits particularly well with the security requirement. 
+omitted. This fits particularly well with the security requirement.
+
+In BibTeX mode, Scholiator emits ASCII only. Characters for which
+Scholiator has no defined safe TeX representation cause a
+warning/error rather than silent transliteration or data loss. 
+
+Redirects/merged QIDs: If the document contains: \cite{Q123} and Q123
+has subsequently been merged into Q456, Scholiator should obtain the
+information from Q456 but must still generate: @article{Q123,
+   ...
+   wikidata = {Q456},
+}
+
+Rank handling. Deprecated statements are ignored. For properties
+representing alternative values, preferred-rank statements are used
+when present; otherwise normal-rank statements are used. For
+inherently multi-valued properties such as authors and editors, all
+non-deprecated relevant statements are retained unless a
+property-specific rule specifies otherwise. 
+
+Process:
+
+               AUX                  BCF
+                │                    │
+                └──── citation discovery
+                           │
+                         QIDs
+                           │
+               cache lookup / wbgetentities
+                           │
+                  raw Wikibase entities
+                           │
+                 Wikidata normalization
+                           │
+                BibliographicRecord
+                    │             │
+                    │             │
+               BibTeX          biblatex
+            TeX-safe ASCII   TeX-safe UTF-8
+                    │             │
+                    └────── .bib ─┘
+
+
+There should be a test suite. Unit and integration tests MUST normally
+run without network access, using stored Wikidata JSON and AUX/BCF
+fixtures. Optional live-Wikidata tests may exist but must not be
+required for the standard test suite. 
