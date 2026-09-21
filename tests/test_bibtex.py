@@ -22,7 +22,7 @@ class BibtexTests(unittest.TestCase):
         self.assertIn("@article{Q100,", text)
         self.assertIn(r"title = {{Secure \^{} title}}", text)
         self.assertIn(r"journal = {Journal \& Tests}", text)
-        self.assertIn(r"doi = {10.1234/ABC\_DEF}", text)
+        self.assertIn(r"doi = {10.1234/ABC_DEF}", text)
         self.assertIn("wikidata = {Q100}", text)
         self.assertIn(r'Ex\"{a}mple, Ada', text)
 

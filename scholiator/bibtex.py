@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .escaping import escape_text, escape_url, validate_doi, validate_isbn
+from .escaping import escape_doi, escape_text, escape_url, validate_doi, validate_isbn
 from .model import BibliographicRecord, Name
 
 ENTRY_TYPES = {
@@ -14,7 +14,9 @@ ENTRY_TYPES = {
     "masters_thesis": "mastersthesis",
     "bachelors_thesis": "misc",
     "report": "techreport",
+    "misc": "misc",
     "software": "misc",
+    "techreport": "techreport",
 }
 
 
@@ -52,7 +54,7 @@ def render(record: BibliographicRecord) -> str:
     if record.pages:
         fields.append(("pages", escape_text(record.pages, ascii_only=True)))
     if record.doi:
-        fields.append(("doi", escape_url(validate_doi(record.doi), ascii_only=True)))
+        fields.append(("doi", escape_doi(record.doi, ascii_only=True)))
     if record.isbn:
         fields.append(("isbn", escape_text(validate_isbn(record.isbn), ascii_only=True)))
     if record.url:

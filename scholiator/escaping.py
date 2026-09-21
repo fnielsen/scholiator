@@ -59,6 +59,11 @@ _DIRECT_ASCII_TEX = {
     "ð": r"{\dh}",
     "Þ": r"{\TH}",
     "þ": r"{\th}",
+    "ﬀ": "ff",
+    "ﬁ": "fi",
+    "ﬂ": "fl",
+    "ﬃ": "ffi",
+    "ﬄ": "ffl",
     "’": "'",
     "–": "--",
 }
@@ -75,8 +80,97 @@ def _validate_controls(value: str) -> None:
             raise EscapingError(f"Control/format character U+{code:04X} is not allowed")
 
 
+def escape_doi(value: str, *, ascii_only: bool = False) -> str:
+    """Validate a DOI for safe inclusion in a .bib field.
+
+    DOI punctuation such as _, /, ., (, ), :, and ; is preserved.
+    Characters that could introduce TeX syntax or break the BibTeX
+    field structure are rejected rather than rewritten.
+    """
+    value = validate_doi(value)
+
+    if "^^" in value:
+        raise EscapingError("Unsafe TeX ^^ sequence in DOI")
+        
+    for char in value:
+        code = ord(char)
+
+        if code == 0 or code < 0x20 or code == 0x7F:
+            raise EscapingError(
+                f"Unsafe control character U+{code:04X} in DOI"
+            )
+
+        if ascii_only and code > 0x7F:
+            raise EscapingError(
+                f"No safe ASCII representation for U+{code:04X} {char!r} in DOI"
+            )
+
+        # Do not turn DOI punctuation such as "_" into TeX commands.
+        # Reject characters capable of injecting/breaking TeX/BibTeX syntax.
+        for char in "\\{}":
+            if char in value:
+                raise EscapingError(
+                    f"Unsafe character {char!r} in DOI"
+                )
+
+    return value
+        
+
 def escape_text(value: str, *, ascii_only: bool) -> str:
-    """Escape untrusted ordinary text for TeX/BibTeX."""
+    """Escape untrusted ordinary text for safe use in TeX bibliography fields.
+
+    In UTF-8 mode, ordinary Unicode characters are preserved while
+    TeX-special characters are escaped. In ASCII-only mode, supported
+    non-ASCII characters are converted to TeX representations.
+
+    Accented characters are handled using Unicode NFD normalization.
+    This also supports characters with multiple combining marks. For
+    example, ``ễ`` (U+1EC5) decomposes into ``e`` plus combining
+    circumflex and combining tilde and is rendered as ``\\~{\\^{e}}``.
+
+    Parameters
+    ----------
+    value : str
+        Untrusted Unicode text to escape.
+    ascii_only : bool
+        If True, require ASCII-only output and represent supported
+        non-ASCII characters using TeX commands. If False, preserve
+        ordinary Unicode characters.
+
+    Returns
+    -------
+    str
+        TeX-safe representation of `value`.
+
+    Raises
+    ------
+    EscapingError
+        If the input contains unsafe control characters or, in
+        ASCII-only mode, a character for which no safe representation
+        is known.
+
+    Examples
+    --------
+    Unicode is retained in UTF-8 mode:
+
+    >>> escape_text("Nguyễn", ascii_only=False)
+    'Nguyễn'
+
+    Multiple combining marks are converted to nested TeX accents:
+
+    >>> escape_text("Nguyễn", ascii_only=True)
+    'Nguy\\\\~{\\\\^{e}}n'
+
+    Simpler accented characters use the same mechanism:
+
+    >>> escape_text("é", ascii_only=True)
+    "\\\\'{e}"
+
+    TeX-special characters are escaped:
+
+    >>> escape_text("A & B", ascii_only=True)
+    'A \\\\& B'
+    """
     _validate_controls(value)
     if not ascii_only:
         return "".join(_SPECIAL.get(char, char) for char in value)

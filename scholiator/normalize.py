@@ -9,18 +9,24 @@ from typing import Iterable
 from .model import BibliographicRecord, Name
 
 TYPE_BY_QID = {
+    "Q10870555": "report",
+    "Q10885494": "inproceedings",  # academic conference paper
     "Q13442814": "article",
-    "Q191067": "article",
-    "Q21481766": "incollection",
-    "Q23927052": "inproceedings",
-    "Q3331189": "book",
-    "Q571": "book",
-    "Q1980247": "incollection",
+    "Q17928402": "misc",  # blogpost
     "Q187685": "doctoral_thesis",
     "Q1907875": "masters_thesis",
-    "Q798134": "bachelors_thesis",
-    "Q10870555": "report",
+    "Q191067": "article",
+    "Q1980247": "incollection",
+    "Q21481766": "incollection",
+    "Q23927052": "inproceedings",
+    "Q2661442": "misc",  # W3C recommendation
+    "Q3099732": "techreport",  # technical report
+    "Q3331189": "book",
+    "Q49848": "misc",  # document
+    "Q571": "book",
+    "Q58632367": "inproceedings",  # conference abstract
     "Q7397": "software",
+    "Q798134": "bachelors_thesis",
 }
 
 # These three types describe progressively more specific ways in which a
