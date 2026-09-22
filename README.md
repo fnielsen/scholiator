@@ -103,7 +103,7 @@ Output replacement is atomic: a failed generation does not overwrite the previou
 
 ## Wikidata access
 
-Scholiator uses the Wikidata Action API `wbgetentities`, batches requests, sends a descriptive User-Agent, uses `maxlag`, requests compression, and backs off on transient HTTP failures including 429 responses. It does not use WDQS/SPARQL.
+Scholiator uses the Wikidata Action API `wbgetentities`, batches requests, sends a descriptive User-Agent, requests compression, and backs off on transient HTTP failures including 429 responses. It does not use WDQS/SPARQL. `maxlag` is not used.
 
 The User-Agent project URL is centralized in `scholiator/wikidata.py` and should be updated when Scholiator gets its own canonical project URL.
 
