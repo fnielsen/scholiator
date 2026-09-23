@@ -64,8 +64,12 @@ _DIRECT_ASCII_TEX = {
     "ﬂ": "fl",
     "ﬃ": "ffi",
     "ﬄ": "ffl",
+    "¹": r"{\textsuperscript{1}}",
+    "²": r"{\textsuperscript{2}}",
+    "³": r"{\textsuperscript{3}}",
     "’": "'",
     "–": "--",
+    "‐": "-",
 }
 
 _DOI_RE = re.compile(r"^10\.\d{4,9}/\S+$", re.IGNORECASE)
